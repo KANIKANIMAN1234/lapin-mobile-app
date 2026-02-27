@@ -35,17 +35,21 @@ export function useLiff() {
           setIdToken(idToken);
 
           const profile = await liff.getProfile();
+          let displayName = profile.displayName;
           if (isGasConfigured()) {
             const regResult = await callGas('registerUser', {
               lineUserId: profile.userId,
               displayName: profile.displayName,
             });
             if (regResult?.data?.is_deleted) {
-              setState({ userId: profile.userId, userName: profile.displayName, isReady: true, isRetired: true });
+              setState({ userId: profile.userId, userName: displayName, isReady: true, isRetired: true });
               return;
             }
+            if (regResult?.data?.name) {
+              displayName = regResult.data.name;
+            }
           }
-          setState({ userId: profile.userId, userName: profile.displayName, isReady: true, isRetired: false });
+          setState({ userId: profile.userId, userName: displayName, isReady: true, isRetired: false });
         } catch {
           enableDemo();
         }
