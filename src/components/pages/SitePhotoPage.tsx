@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import type { ProjectOption } from '@/types';
 import { PHOTO_CATEGORIES } from '@/lib/constants';
-import { todayStr, formatText } from '@/lib/utils';
+import { todayStr, formatText, compressImage } from '@/lib/utils';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface SitePhotoPageProps {
@@ -62,27 +62,28 @@ export default function SitePhotoPage({ projects, sendToGas, onShowLoading, onHi
     if (photos.length === 0) { onToast('写真を選択してください', 'error'); return; }
 
     setSubmitting(true);
-    onShowLoading('アップロード中...');
+    const total = photos.length;
 
     try {
-      for (let i = 0; i < photos.length; i++) {
+      for (let i = 0; i < total; i++) {
+        onShowLoading(`写真を圧縮・アップロード中... (${i + 1}/${total})`);
+        const compressed = await compressImage(photos[i]);
         const fileName = `photo_${Date.now()}_${i}.jpg`;
         await sendToGas('uploadPhoto', {
           project_id: project,
           type: category,
-          drive_url: 'pending_upload',
           file_name: fileName,
+          photo_data: compressed,
           description: memo || '',
           photo_date: date,
         });
       }
 
-      const count = photos.length;
       onHideLoading();
       setPhotos([]);
       setMemo('');
       setDate(todayStr());
-      onToast(`${count}枚の写真メタデータを登録しました`, 'success');
+      onToast(`${total}枚の写真をGoogle Driveにアップロードしました`, 'success');
     } catch (err) {
       onHideLoading();
       onToast(err instanceof Error ? err.message : 'アップロードに失敗しました', 'error');
