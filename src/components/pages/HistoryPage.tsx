@@ -1,28 +1,37 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { ExpenseItem } from '@/types';
+import type { ExpenseItem, ProjectOption } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
 import { formatYen } from '@/lib/utils';
 
 interface HistoryPageProps {
   data: ExpenseItem[];
+  projects: ProjectOption[];
   onRefresh: () => void;
 }
 
-export default function HistoryPage({ data, onRefresh }: HistoryPageProps) {
+export default function HistoryPage({ data, projects, onRefresh }: HistoryPageProps) {
   const [filterProject, setFilterProject] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
 
-  const projects = useMemo(() => {
+  const projectLabelMap = useMemo(() => {
     const map = new Map<string, string>();
+    projects.forEach((p) => map.set(p.value, p.label));
+    return map;
+  }, [projects]);
+
+  const usedProjects = useMemo(() => {
+    const seen = new Map<string, string>();
     data.forEach((d) => {
-      if (d.project) map.set(d.project, d.projectName);
+      if (d.project && !seen.has(d.project)) {
+        seen.set(d.project, projectLabelMap.get(d.project) || d.projectName || d.project);
+      }
     });
-    return Array.from(map.entries());
-  }, [data]);
+    return Array.from(seen.entries());
+  }, [data, projectLabelMap]);
 
   const filtered = useMemo(() => {
     return data.filter((d) => {
@@ -54,8 +63,8 @@ export default function HistoryPage({ data, onRefresh }: HistoryPageProps) {
         <div className="grid grid-cols-2 gap-2">
           <select className="sp-input py-2 text-xs" value={filterProject} onChange={(e) => setFilterProject(e.target.value)}>
             <option value="">全案件</option>
-            {projects.map(([id, name]) => (
-              <option key={id} value={id}>{name || id}</option>
+            {usedProjects.map(([id, label]) => (
+              <option key={id} value={id}>{label}</option>
             ))}
           </select>
           <select className="sp-input py-2 text-xs" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
@@ -93,7 +102,7 @@ export default function HistoryPage({ data, onRefresh }: HistoryPageProps) {
         <div key={item.id} className="bg-white rounded-xl p-3 mb-2 shadow-sm flex justify-between items-center">
           <div>
             <div className="text-sm font-semibold">{item.memo}</div>
-            <div className="text-[0.7rem] text-blue-500 font-medium">{item.projectName}</div>
+            <div className="text-[0.7rem] text-blue-500 font-medium">{projectLabelMap.get(item.project) || item.projectName}</div>
             <div className="text-[0.7rem] text-gray-400 mt-0.5">
               {item.category} / {item.date} / {item.userName}
             </div>

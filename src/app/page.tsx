@@ -173,7 +173,7 @@ export default function Home() {
         )}
 
         {activePage === 'list' && (
-          <HistoryPage data={expenses} onRefresh={reloadExpenses} />
+          <HistoryPage data={expenses} projects={projects} onRefresh={reloadExpenses} />
         )}
 
         {activePage === 'summary' && (
