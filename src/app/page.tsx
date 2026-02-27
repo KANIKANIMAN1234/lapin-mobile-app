@@ -71,19 +71,26 @@ export default function Home() {
 
         if (projRes?.success && projRes.data?.projects) {
           setProjects(projRes.data.projects.map(mapGasProject));
+        } else if (projRes?.success === false) {
+          console.error('案件読み込みエラー:', projRes.error);
+          showToast(projRes.error?.message || '案件データの読み込みに失敗しました', 'error');
         }
         if (expRes?.success && expRes.data?.expenses) {
           setExpenses(expRes.data.expenses.map(mapGasExpense));
+        } else if (expRes?.success === false) {
+          console.error('経費読み込みエラー:', expRes.error);
+          showToast(expRes.error?.message || '経費データの読み込みに失敗しました', 'error');
         }
       } catch (err) {
         console.error('データ読み込みエラー:', err);
+        if (!cancelled) showToast('データの読み込みに失敗しました', 'error');
       }
       if (!cancelled) setDataLoaded(true);
     }
 
     loadData();
     return () => { cancelled = true; };
-  }, [isReady]);
+  }, [isReady, showToast]);
 
   const showLoading = useCallback((text: string) => {
     setLoadingText(text);
