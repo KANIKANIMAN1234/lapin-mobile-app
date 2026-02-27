@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import type { ProjectOption } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
-import { todayStr } from '@/lib/utils';
+import { todayStr, compressImage } from '@/lib/utils';
 
 interface ExpensePageProps {
   userId: string;
@@ -35,6 +35,8 @@ export default function ExpensePage({
   const [category, setCategory] = useState('材料費');
   const [memo, setMemo] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [ocrDone, setOcrDone] = useState(false);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -52,12 +54,41 @@ export default function ExpensePage({
         };
         reader.readAsDataURL(file);
       });
+      setOcrDone(false);
     },
     [imageBlobs],
   );
 
   const removeImg = (i: number) => {
     setImageBlobs((prev) => prev.filter((_, idx) => idx !== i));
+    setOcrDone(false);
+  };
+
+  const handleOcr = async () => {
+    if (imageBlobs.length === 0) { onToast('先にレシートを撮影してください', 'error'); return; }
+    setOcrProcessing(true);
+    onShowLoading('AIがレシートを読み取り中...');
+    try {
+      const compressed = await compressImage(imageBlobs[0], 1024, 0.8);
+      const result = await sendToGas('ocrReceipt', { photo_data: compressed });
+      onHideLoading();
+      if (result?.success && result.data) {
+        const d = result.data;
+        if (d.amount > 0) setAmount(String(d.amount));
+        if (d.date) setDate(d.date);
+        if (d.category && CATEGORIES.includes(d.category)) setCategory(d.category);
+        const memoText = [d.store_name, d.items].filter(Boolean).join(' / ');
+        if (memoText) setMemo(memoText);
+        setOcrDone(true);
+        onToast('レシートを読み取りました', 'success');
+      } else {
+        onToast(result?.error?.message || '読み取りに失敗しました', 'error');
+      }
+    } catch (err) {
+      onHideLoading();
+      onToast(err instanceof Error ? err.message : '読み取りに失敗しました', 'error');
+    }
+    setOcrProcessing(false);
   };
 
   const handleSubmit = async () => {
@@ -105,6 +136,7 @@ export default function ExpensePage({
     setProject('');
     setDate(todayStr());
     setImageBlobs([]);
+    setOcrDone(false);
   };
 
   return (
@@ -167,6 +199,21 @@ export default function ExpensePage({
               </div>
             ))}
           </div>
+        )}
+
+        {imageBlobs.length > 0 && (
+          <button
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold border-none cursor-pointer transition-colors mb-2 ${
+              ocrDone
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white active:from-blue-600 active:to-purple-600'
+            }`}
+            onClick={handleOcr}
+            disabled={ocrProcessing || ocrDone}
+          >
+            <span className="material-icons text-lg">{ocrDone ? 'check_circle' : 'auto_awesome'}</span>
+            {ocrProcessing ? 'AI読み取り中...' : ocrDone ? '読み取り完了' : 'AIでレシートを読み取り'}
+          </button>
         )}
       </div>
 
