@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { LIFF_ID } from '@/lib/constants';
-import { callGas, isGasConfigured } from '@/lib/gas';
+import { callGas, isGasConfigured, setIdToken } from '@/lib/gas';
 
 interface LiffState {
   userId: string;
@@ -31,13 +31,16 @@ export function useLiff() {
             liff.login();
             return;
           }
+          const idToken = liff.getIDToken();
+          setIdToken(idToken);
+
           const profile = await liff.getProfile();
           if (isGasConfigured()) {
-            const regResult = await callGas('register', {
-              userId: profile.userId,
+            const regResult = await callGas('registerUser', {
+              lineUserId: profile.userId,
               displayName: profile.displayName,
             });
-            if (regResult?.status === 'retired') {
+            if (regResult?.data?.is_deleted) {
               setState({ userId: profile.userId, userName: profile.displayName, isReady: true, isRetired: true });
               return;
             }
@@ -64,10 +67,15 @@ export function useLiff() {
 export function useSendToGas() {
   const send = useCallback(async (action: string, data: Record<string, unknown>) => {
     if (isGasConfigured()) {
-      return callGas(action, data);
+      const result = await callGas(action, data);
+      if (result?.success === false) {
+        throw new Error(result.error?.message || 'GASエラー');
+      }
+      return result;
     }
+    console.warn('[MOCK MODE] GAS_URL未設定のため、モックデータを返します action=' + action);
     await new Promise((r) => setTimeout(r, 1500));
-    return { status: 'success' };
+    return { success: true, mock: true };
   }, []);
   return send;
 }

@@ -100,15 +100,13 @@ export default function ExpensePage({
     onShowLoading('スプレッドシートに登録中...');
 
     try {
-      await sendToGas('uploadExpense', {
-        lineId: userId,
-        userName,
-        project,
+      await sendToGas('createExpense', {
+        date,
         amount: Number(amount),
         category,
-        memo: memo || '未設定',
-        date,
-        imageBlobs,
+        description: memo || '未設定',
+        project_id: project === 'general' ? '' : project,
+        notes: '',
       });
 
       const opt = PROJECT_OPTIONS.find((o) => o.value === project);
