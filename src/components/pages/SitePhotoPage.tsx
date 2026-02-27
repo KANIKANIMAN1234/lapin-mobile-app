@@ -113,12 +113,12 @@ export default function SitePhotoPage({ projects, sendToGas, onShowLoading, onHi
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5 mb-3">
-        <div>
+      <div className="flex flex-wrap gap-2.5 mb-3">
+        <div className="flex-1 min-w-[140px]">
           <label className="sp-label">撮影日</label>
           <input type="date" className="sp-input" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
-        <div>
+        <div className="flex-1 min-w-[140px]">
           <label className="sp-label">カテゴリ</label>
           <select className="sp-input" value={category} onChange={(e) => setCategory(e.target.value)}>
             {PHOTO_CATEGORIES.map((c) => (
