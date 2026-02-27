@@ -96,9 +96,14 @@ export default function ExpensePage({
     if (!project) { onToast('案件を選択してください', 'error'); return; }
 
     setSubmitting(true);
-    onShowLoading('スプレッドシートに登録中...');
+    onShowLoading(imageBlobs.length > 0 ? 'レシートをアップロード・登録中...' : 'スプレッドシートに登録中...');
 
     try {
+      let receiptPhotoData = '';
+      if (imageBlobs.length > 0) {
+        receiptPhotoData = await compressImage(imageBlobs[0], 1200, 0.7);
+      }
+
       await sendToGas('createExpense', {
         date,
         amount: Number(amount),
@@ -106,6 +111,7 @@ export default function ExpensePage({
         description: memo || '未設定',
         project_id: project === 'general' ? '' : project,
         notes: '',
+        receipt_photo_data: receiptPhotoData || undefined,
       });
 
       const opt = projects.find((o) => o.value === project);
