@@ -1,21 +1,24 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { PROJECT_OPTIONS } from '@/lib/constants';
+import type { ProjectOption } from '@/types';
 import { todayStr, formatText } from '@/lib/utils';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface ReportPageProps {
+  projects: ProjectOption[];
+  sendToGas: (action: string, data: Record<string, unknown>) => Promise<any>;
   onShowLoading: (text: string) => void;
   onHideLoading: () => void;
   onToast: (msg: string, type: 'success' | 'error') => void;
 }
 
-export default function ReportPage({ onShowLoading, onHideLoading, onToast }: ReportPageProps) {
+export default function ReportPage({ projects, sendToGas, onShowLoading, onHideLoading, onToast }: ReportPageProps) {
   const [date, setDate] = useState(todayStr());
   const [project, setProject] = useState('');
   const [content, setContent] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const onVoiceResult = useCallback((text: string) => setContent(text), []);
@@ -45,18 +48,30 @@ export default function ReportPage({ onShowLoading, onHideLoading, onToast }: Re
 
   const removePhoto = (i: number) => setPhotos((prev) => prev.filter((_, idx) => idx !== i));
 
-  const submit = () => {
-    if (!project) { onToast('案件を選択してください', 'error'); return; }
+  const submit = async () => {
     if (!content.trim()) { onToast('報告内容を入力してください', 'error'); return; }
 
+    setSubmitting(true);
     onShowLoading('日報を送信中...');
-    setTimeout(() => {
+
+    try {
+      await sendToGas('createReport', {
+        report_date: date,
+        content: content.trim(),
+        title: `${date} 日報`,
+      });
+
       onHideLoading();
+      onToast('日報を送信しました', 'success');
       setContent('');
       setProject('');
       setPhotos([]);
-      onToast('日報を送信しました', 'success');
-    }, 1500);
+      setDate(todayStr());
+    } catch (err) {
+      onHideLoading();
+      onToast(err instanceof Error ? err.message : '送信に失敗しました', 'error');
+    }
+    setSubmitting(false);
   };
 
   const handleVoiceToggle = () => {
@@ -78,8 +93,8 @@ export default function ReportPage({ onShowLoading, onHideLoading, onToast }: Re
       <div className="mb-3">
         <label className="sp-label">案件</label>
         <select className="sp-input" value={project} onChange={(e) => setProject(e.target.value)}>
-          <option value="">案件を選択</option>
-          {PROJECT_OPTIONS.map((o) => (
+          <option value="">案件を選択（任意）</option>
+          {projects.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -145,8 +160,9 @@ export default function ReportPage({ onShowLoading, onHideLoading, onToast }: Re
         />
       </div>
 
-      <button className="btn-line-action" onClick={submit}>
-        <span className="material-icons text-xl">send</span> 日報を送信
+      <button className="btn-line-action" onClick={submit} disabled={submitting}>
+        <span className="material-icons text-xl">send</span>
+        {submitting ? '送信中...' : '日報を送信'}
       </button>
     </div>
   );

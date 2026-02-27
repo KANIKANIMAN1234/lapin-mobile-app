@@ -18,6 +18,19 @@ export async function callGas(action: string, data: Record<string, unknown>) {
   return res.json();
 }
 
+export async function callGasGet(action: string, params: Record<string, string> = {}) {
+  if (!GAS_URL) {
+    throw new Error('GAS_URL is not configured');
+  }
+  const searchParams = new URLSearchParams({
+    action,
+    token: cachedIdToken || '',
+    ...params,
+  });
+  const res = await fetch(`${GAS_URL}?${searchParams.toString()}`);
+  return res.json();
+}
+
 export function isGasConfigured(): boolean {
   return !!GAS_URL;
 }

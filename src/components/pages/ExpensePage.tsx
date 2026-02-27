@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import type { AICandidate } from '@/types';
-import { PROJECT_OPTIONS, CATEGORIES } from '@/lib/constants';
+import type { ProjectOption } from '@/types';
+import { CATEGORIES } from '@/lib/constants';
 import { todayStr } from '@/lib/utils';
 
 interface ExpensePageProps {
   userId: string;
   userName: string;
   isReady: boolean;
+  projects: ProjectOption[];
   onShowLoading: (text: string) => void;
   onHideLoading: () => void;
   onToast: (msg: string, type: 'success' | 'error') => void;
@@ -20,6 +21,7 @@ export default function ExpensePage({
   userId,
   userName,
   isReady,
+  projects,
   onShowLoading,
   onHideLoading,
   onToast,
@@ -27,9 +29,6 @@ export default function ExpensePage({
   onAddExpense,
 }: ExpensePageProps) {
   const [imageBlobs, setImageBlobs] = useState<string[]>([]);
-  const [showOcr, setShowOcr] = useState(false);
-  const [candidates, setCandidates] = useState<AICandidate[]>([]);
-  const [selectedCandidate, setSelectedCandidate] = useState('');
   const [project, setProject] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayStr());
@@ -53,43 +52,12 @@ export default function ExpensePage({
         };
         reader.readAsDataURL(file);
       });
-
-      setTimeout(() => simulateOCR(), 500);
     },
     [imageBlobs],
   );
 
-  const simulateOCR = () => {
-    onShowLoading('OCR読み取り中...');
-    setTimeout(() => {
-      onHideLoading();
-      setShowOcr(true);
-      setAmount('15800');
-      setMemo('塗料（パーフェクトトップ）');
-
-      const aiCandidates: AICandidate[] = [
-        { project: '2026-005', name: '高橋三郎様 外壁塗装', confidence: 85, reason: '購入日が工事期間中、品目が外壁塗装に関連' },
-        { project: '2026-001', name: '山本太郎様 外壁塗装', confidence: 60, reason: '購入日が工事期間中' },
-      ];
-      setCandidates(aiCandidates);
-      setSelectedCandidate(aiCandidates[0].project);
-      setProject(aiCandidates[0].project);
-      onToast('OCR読み取り完了', 'success');
-    }, 1500);
-  };
-
   const removeImg = (i: number) => {
-    const next = imageBlobs.filter((_, idx) => idx !== i);
-    setImageBlobs(next);
-    if (next.length === 0) {
-      setShowOcr(false);
-      setCandidates([]);
-    }
-  };
-
-  const selectCandidate = (proj: string) => {
-    setSelectedCandidate(proj);
-    setProject(proj);
+    setImageBlobs((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   const handleSubmit = async () => {
@@ -109,10 +77,10 @@ export default function ExpensePage({
         notes: '',
       });
 
-      const opt = PROJECT_OPTIONS.find((o) => o.value === project);
+      const opt = projects.find((o) => o.value === project);
       onAddExpense({
         project,
-        projectName: opt?.label.split(' - ')[0].split(' ').slice(1).join(' ') || '共通経費',
+        projectName: opt?.label || '共通経費',
         amount: Number(amount),
         category,
         memo: memo || '未設定',
@@ -124,9 +92,9 @@ export default function ExpensePage({
       onHideLoading();
       onToast('スプレッドシートに登録しました', 'success');
       resetForm();
-    } catch {
+    } catch (err) {
       onHideLoading();
-      onToast('送信に失敗しました', 'error');
+      onToast(err instanceof Error ? err.message : '送信に失敗しました', 'error');
     }
     setSubmitting(false);
   };
@@ -136,9 +104,6 @@ export default function ExpensePage({
     setMemo('');
     setProject('');
     setDate(todayStr());
-    setShowOcr(false);
-    setCandidates([]);
-    setSelectedCandidate('');
     setImageBlobs([]);
   };
 
@@ -188,7 +153,6 @@ export default function ExpensePage({
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
         />
 
-        {/* プレビュー */}
         {imageBlobs.length > 0 && (
           <div className="flex gap-1.5 mb-3">
             {imageBlobs.map((blob, i) => (
@@ -204,14 +168,6 @@ export default function ExpensePage({
             ))}
           </div>
         )}
-
-        {/* OCR結果 */}
-        {showOcr && (
-          <div className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-100 rounded-lg text-xs font-semibold text-amber-600 mb-3">
-            <span className="material-icons text-lg">auto_awesome</span>
-            OCR自動読み取り結果
-          </div>
-        )}
       </div>
 
       {/* 経費情報 */}
@@ -220,45 +176,10 @@ export default function ExpensePage({
           <span className="material-icons">edit_note</span> 経費情報
         </h3>
 
-        {/* AI候補 */}
-        {candidates.length > 0 && (
-          <div className="mb-3">
-            <h4 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
-              <span className="material-icons text-base text-purple-600">psychology</span> AI案件候補
-            </h4>
-            {candidates.map((c) => (
-              <div
-                key={c.project}
-                className={`flex items-center gap-2.5 p-2.5 border-2 rounded-lg mb-1.5 cursor-pointer transition-colors ${
-                  selectedCandidate === c.project ? 'border-line-green bg-line-green-light' : 'border-gray-200'
-                }`}
-                onClick={() => selectCandidate(c.project)}
-              >
-                <input
-                  type="radio"
-                  name="candidate"
-                  checked={selectedCandidate === c.project}
-                  readOnly
-                  className="accent-line-green"
-                />
-                <div className="flex-1">
-                  <strong className="block text-sm mb-0.5">
-                    {c.project} {c.name}
-                  </strong>
-                  <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-600 text-[0.65rem] rounded font-semibold">
-                    確信度: {c.confidence}%
-                  </span>
-                  <div className="text-[0.7rem] text-gray-500 mt-0.5">{c.reason}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         <label className="sp-label">案件番号 / 案件</label>
         <select className="sp-input" value={project} onChange={(e) => setProject(e.target.value)}>
           <option value="">案件を選択</option>
-          {PROJECT_OPTIONS.map((o) => (
+          {projects.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
           <option value="general">共通経費（案件なし）</option>

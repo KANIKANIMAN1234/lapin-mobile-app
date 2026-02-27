@@ -1,17 +1,20 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { PROJECT_OPTIONS, PHOTO_CATEGORIES } from '@/lib/constants';
+import type { ProjectOption } from '@/types';
+import { PHOTO_CATEGORIES } from '@/lib/constants';
 import { todayStr, formatText } from '@/lib/utils';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface SitePhotoPageProps {
+  projects: ProjectOption[];
+  sendToGas: (action: string, data: Record<string, unknown>) => Promise<any>;
   onShowLoading: (text: string) => void;
   onHideLoading: () => void;
   onToast: (msg: string, type: 'success' | 'error') => void;
 }
 
-export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }: SitePhotoPageProps) {
+export default function SitePhotoPage({ projects, sendToGas, onShowLoading, onHideLoading, onToast }: SitePhotoPageProps) {
   const [project, setProject] = useState('');
   const [date, setDate] = useState(todayStr());
   const [category, setCategory] = useState('before');
@@ -19,6 +22,7 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
   const [workTypes, setWorkTypes] = useState<string[]>([]);
   const [memo, setMemo] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const onVoiceResult = useCallback((text: string) => setMemo(text), []);
@@ -26,7 +30,7 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
 
   const handleProjectChange = (val: string) => {
     setProject(val);
-    const opt = PROJECT_OPTIONS.find((o) => o.value === val);
+    const opt = projects.find((o) => o.value === val);
     const types = opt?.workTypes || [];
     setWorkTypes(types);
     setWorkType(types[0] || '');
@@ -53,19 +57,37 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
 
   const removePhoto = (i: number) => setPhotos((prev) => prev.filter((_, idx) => idx !== i));
 
-  const upload = () => {
+  const upload = async () => {
     if (!project) { onToast('案件を選択してください', 'error'); return; }
     if (photos.length === 0) { onToast('写真を選択してください', 'error'); return; }
 
+    setSubmitting(true);
     onShowLoading('アップロード中...');
-    setTimeout(() => {
+
+    try {
+      for (let i = 0; i < photos.length; i++) {
+        const fileName = `photo_${Date.now()}_${i}.jpg`;
+        await sendToGas('uploadPhoto', {
+          project_id: project,
+          type: category,
+          drive_url: 'pending_upload',
+          file_name: fileName,
+          description: memo || '',
+          photo_date: date,
+        });
+      }
+
       const count = photos.length;
       onHideLoading();
       setPhotos([]);
       setMemo('');
       setDate(todayStr());
-      onToast(`${count}枚の写真をアップロードしました`, 'success');
-    }, 2000);
+      onToast(`${count}枚の写真メタデータを登録しました`, 'success');
+    } catch (err) {
+      onHideLoading();
+      onToast(err instanceof Error ? err.message : 'アップロードに失敗しました', 'error');
+    }
+    setSubmitting(false);
   };
 
   const handleVoiceToggle = () => {
@@ -85,7 +107,7 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
         <label className="sp-label">案件</label>
         <select className="sp-input" value={project} onChange={(e) => handleProjectChange(e.target.value)}>
           <option value="">案件を選択</option>
-          {PROJECT_OPTIONS.map((o) => (
+          {projects.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
@@ -144,7 +166,6 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
         </button>
       </div>
 
-      {/* アップロードエリア */}
       <div
         className="border-2 border-dashed border-gray-300 rounded-xl py-7 px-4 text-center cursor-pointer text-gray-400 transition-colors hover:border-line-green hover:text-line-green mb-3"
         onClick={() => fileRef.current?.click()}
@@ -162,7 +183,6 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
         onChange={(e) => { addPhotos(e.target.files); e.target.value = ''; }}
       />
 
-      {/* プレビューグリッド */}
       {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-2 mb-3">
           {photos.map((src, i) => (
@@ -180,8 +200,9 @@ export default function SitePhotoPage({ onShowLoading, onHideLoading, onToast }:
       )}
 
       {photos.length > 0 && (
-        <button className="btn-line-action" onClick={upload}>
-          <span className="material-icons text-xl">cloud_upload</span> アップロード
+        <button className="btn-line-action" onClick={upload} disabled={submitting}>
+          <span className="material-icons text-xl">cloud_upload</span>
+          {submitting ? 'アップロード中...' : 'アップロード'}
         </button>
       )}
     </div>

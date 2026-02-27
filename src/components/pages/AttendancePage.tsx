@@ -2,18 +2,20 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { AttendanceLog } from '@/types';
-import { padTime } from '@/lib/utils';
+import { padTime, todayStr } from '@/lib/utils';
 
 interface AttendancePageProps {
+  sendToGas: (action: string, data: Record<string, unknown>) => Promise<any>;
   onToast: (msg: string, type: 'success' | 'error') => void;
 }
 
-export default function AttendancePage({ onToast }: AttendancePageProps) {
+export default function AttendancePage({ sendToGas, onToast }: AttendancePageProps) {
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [status, setStatus] = useState('未打刻');
+  const [submitting, setSubmitting] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
@@ -28,23 +30,33 @@ export default function AttendancePage({ onToast }: AttendancePageProps) {
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  const clockIn = () => {
+  const recordAttendance = async (type: 'clock_in' | 'clock_out') => {
     const now = new Date();
     const t = `${padTime(now.getHours())}:${padTime(now.getMinutes())}`;
-    setLogs((prev) => [...prev, { type: 'in', time: t }]);
-    setIsClockedIn(true);
-    setStatus(`出勤中 (${t}〜)`);
-    onToast(`出勤を記録しました (${t})`, 'success');
-  };
+    const typeLabel = type === 'clock_in' ? '出勤' : '退勤';
 
-  const clockOut = () => {
-    const now = new Date();
-    const t = `${padTime(now.getHours())}:${padTime(now.getMinutes())}`;
-    setLogs((prev) => [...prev, { type: 'out', time: t }]);
-    setIsClockedIn(false);
-    const inLog = [...logs].reverse().find((l) => l.type === 'in');
-    setStatus(`退勤済み (${inLog ? inLog.time : ''}〜${t})`);
-    onToast(`退勤を記録しました (${t})`, 'success');
+    setSubmitting(true);
+    try {
+      await sendToGas('createAttendance', {
+        type,
+        date: todayStr(),
+        time: t,
+      });
+
+      setLogs((prev) => [...prev, { type: type === 'clock_in' ? 'in' : 'out', time: t }]);
+      if (type === 'clock_in') {
+        setIsClockedIn(true);
+        setStatus(`出勤中 (${t}〜)`);
+      } else {
+        setIsClockedIn(false);
+        const inLog = [...logs].reverse().find((l) => l.type === 'in');
+        setStatus(`退勤済み (${inLog ? inLog.time : ''}〜${t})`);
+      }
+      onToast(`${typeLabel}を記録しました (${t})`, 'success');
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : `${typeLabel}の記録に失敗しました`, 'error');
+    }
+    setSubmitting(false);
   };
 
   return (
@@ -54,23 +66,23 @@ export default function AttendancePage({ onToast }: AttendancePageProps) {
       <div className="flex gap-4 justify-center mb-5">
         <button
           className={`w-[130px] h-[130px] rounded-full border-none flex flex-col items-center justify-center gap-1.5 text-base font-bold cursor-pointer transition-transform shadow-lg ${
-            isClockedIn ? 'bg-gray-300 cursor-not-allowed' : 'bg-line-green text-white active:scale-95'
+            isClockedIn || submitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-line-green text-white active:scale-95'
           }`}
-          onClick={clockIn}
-          disabled={isClockedIn}
+          onClick={() => recordAttendance('clock_in')}
+          disabled={isClockedIn || submitting}
         >
           <span className="material-icons text-4xl">login</span>
-          <span>出勤</span>
+          <span>{submitting ? '記録中...' : '出勤'}</span>
         </button>
         <button
           className={`w-[130px] h-[130px] rounded-full border-none flex flex-col items-center justify-center gap-1.5 text-base font-bold cursor-pointer transition-transform shadow-lg ${
-            !isClockedIn ? 'bg-gray-300 cursor-not-allowed' : 'bg-red-500 text-white active:scale-95'
+            !isClockedIn || submitting ? 'bg-gray-300 cursor-not-allowed' : 'bg-red-500 text-white active:scale-95'
           }`}
-          onClick={clockOut}
-          disabled={!isClockedIn}
+          onClick={() => recordAttendance('clock_out')}
+          disabled={!isClockedIn || submitting}
         >
           <span className="material-icons text-4xl">logout</span>
-          <span>退勤</span>
+          <span>{submitting ? '記録中...' : '退勤'}</span>
         </button>
       </div>
       <div className="text-sm font-semibold text-gray-500 mb-4 px-4 py-2 bg-gray-50 rounded-full inline-block">

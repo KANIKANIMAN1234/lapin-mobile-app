@@ -55,7 +55,7 @@ export function useLiff() {
     }
 
     function enableDemo() {
-      setState({ userId: 'demo_user', userName: '山田太郎', isReady: true, isRetired: false });
+      setState({ userId: 'demo_user', userName: 'テストユーザー', isReady: true, isRetired: false });
     }
 
     init();
@@ -73,8 +73,8 @@ export function useSendToGas() {
       }
       return result;
     }
-    console.warn('[MOCK MODE] GAS_URL未設定のため、モックデータを返します action=' + action);
-    await new Promise((r) => setTimeout(r, 1500));
+    console.warn('[MOCK MODE] GAS_URL未設定 action=' + action);
+    await new Promise((r) => setTimeout(r, 800));
     return { success: true, mock: true };
   }, []);
   return send;

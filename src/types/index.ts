@@ -10,11 +10,22 @@ export interface ExpenseItem {
   imageUrls: string[];
 }
 
+export interface ProjectOption {
+  value: string;
+  label: string;
+  workTypes: string[];
+}
+
 export interface ProjectMaster {
   name: string;
   orderAmount: number;
   plannedCostRate: number;
   scheduledPayments: number;
+}
+
+export interface StaffOption {
+  value: string;
+  label: string;
 }
 
 export interface AICandidate {
