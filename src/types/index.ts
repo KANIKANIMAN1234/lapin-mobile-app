@@ -36,7 +36,7 @@ export interface AICandidate {
 }
 
 export interface AttendanceLog {
-  type: 'in' | 'out';
+  type: 'in' | 'out' | 'break_start' | 'break_end';
   time: string;
 }
 

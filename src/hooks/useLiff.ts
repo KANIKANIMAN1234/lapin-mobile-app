@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { LIFF_ID } from '@/lib/constants';
-import { callGas, isGasConfigured, setIdToken } from '@/lib/gas';
+import { callGas, callGasGet, isGasConfigured, getSessionToken, createSessionFromIdToken } from '@/lib/gas';
 
 interface LiffState {
   userId: string;
@@ -23,6 +23,26 @@ export function useLiff() {
     async function init() {
       if (typeof window === 'undefined') return;
 
+      // 既存セッショントークンがあれば、ユーザー情報を取得して復元
+      const existingSession = getSessionToken();
+      if (existingSession && isGasConfigured()) {
+        try {
+          const userRes = await callGasGet('getUserInfo');
+          if (userRes?.success && userRes.data) {
+            const isDeleted = userRes.data.is_deleted;
+            setState({
+              userId: String(userRes.data.id || ''),
+              userName: String(userRes.data.name || ''),
+              isReady: true,
+              isRetired: !!isDeleted,
+            });
+            return;
+          }
+        } catch {
+          // セッションが無効な場合はLIFF再認証にフォールスルー
+        }
+      }
+
       if (LIFF_ID) {
         try {
           const liff = (await import('@line/liff')).default;
@@ -32,11 +52,14 @@ export function useLiff() {
             return;
           }
           const idToken = liff.getIDToken();
-          setIdToken(idToken);
 
           const profile = await liff.getProfile();
           let displayName = profile.displayName;
-          if (isGasConfigured()) {
+
+          if (isGasConfigured() && idToken) {
+            // セッショントークンを発行・保存
+            await createSessionFromIdToken(idToken);
+
             const regResult = await callGas('registerUser', {
               lineUserId: profile.userId,
               displayName: profile.displayName,
