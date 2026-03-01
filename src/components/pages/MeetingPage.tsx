@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ProjectOption } from '@/types';
 import { callGasGet, callGas } from '@/lib/gas';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface MeetingPageProps {
   projects: ProjectOption[];
@@ -41,9 +42,10 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
     next_action: '',
   });
   const [submitting, setSubmitting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [aiFormatting, setAiFormatting] = useState(false);
-  const recognitionRef = useRef<unknown>(null);
+
+  const onVoiceResult = useCallback((text: string) => setForm((prev) => ({ ...prev, content: text })), []);
+  const voice = useVoiceInput(onVoiceResult);
 
   const loadMeetings = useCallback(async (projectId?: string) => {
     if (!projectId) { setMeetings([]); setLoading(false); return; }
@@ -70,47 +72,13 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
     }).catch(() => {});
   }, []);
 
-  const toggleVoice = useCallback(() => {
-    if (isRecording) {
-      const rec = recognitionRef.current as { stop?: () => void } | null;
-      rec?.stop?.();
-      setIsRecording(false);
-      return;
-    }
-    const W = window as unknown as Record<string, unknown>;
-    const SpeechRec = (W.SpeechRecognition || W.webkitSpeechRecognition) as { new(): {
-      lang: string; continuous: boolean; interimResults: boolean;
-      onresult: (e: { results: { isFinal: boolean;[n: number]: { transcript: string } }[] }) => void;
-      onerror: () => void; onend: () => void; start: () => void; stop: () => void;
-    } } | undefined;
-    if (!SpeechRec) { onToast('このブラウザは音声入力に対応していません', 'error'); return; }
-    const rec = new SpeechRec();
-    rec.lang = 'ja-JP';
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e) => {
-      let transcript = '';
-      for (let i = 0; i < e.results.length; i++) {
-        transcript += e.results[i][0].transcript;
-      }
-      setForm((prev) => ({ ...prev, content: prev.content.split('\n【音声入力中】')[0] + (transcript ? '\n【音声入力中】' + transcript : '') }));
-      const allFinal = Array.from(e.results).every((r) => r.isFinal);
-      if (allFinal && transcript) {
-        setForm((prev) => {
-          const base = prev.content.split('\n【音声入力中】')[0];
-          return { ...prev, content: (base ? base + '\n' : '') + transcript };
-        });
-      }
-    };
-    rec.onerror = () => setIsRecording(false);
-    rec.onend = () => setIsRecording(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsRecording(true);
-  }, [isRecording, onToast]);
+  const toggleVoice = () => {
+    const r = voice.toggle(form.content);
+    if (r === 'unsupported') onToast('このブラウザは音声入力に対応していません', 'error');
+  };
 
   const handleAiFormat = useCallback(async () => {
-    const raw = form.content.split('\n【音声入力中】')[0].trim();
+    const raw = form.content.trim();
     if (!raw) return;
     setAiFormatting(true);
     try {
@@ -226,16 +194,16 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
               <button
                 type="button"
                 onClick={toggleVoice}
-                className={`voice-btn ${isRecording ? 'recording' : ''}`}
+                className={`voice-btn ${voice.isRecording ? 'recording' : ''}`}
                 style={{ position: 'relative', width: 'auto', height: 'auto', padding: '3px 8px', borderRadius: 8 }}
               >
-                <span className="material-icons" style={{ fontSize: 16 }}>{isRecording ? 'stop' : 'mic'}</span>
-                <span className="text-[10px] font-medium ml-0.5">{isRecording ? '停止' : '音声'}</span>
+                <span className="material-icons" style={{ fontSize: 16 }}>{voice.isRecording ? 'stop' : 'mic'}</span>
+                <span className="text-[10px] font-medium ml-0.5">{voice.isRecording ? '停止' : '音声'}</span>
               </button>
               <button
                 type="button"
                 onClick={handleAiFormat}
-                disabled={aiFormatting || !form.content.split('\n【音声入力中】')[0].trim()}
+                disabled={aiFormatting || !form.content.trim()}
                 className="btn-format"
                 style={{ marginTop: 0, padding: '3px 8px' }}
               >
@@ -245,13 +213,13 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
             </div>
           </div>
           <textarea
-            className={`sp-textarea ${isRecording ? 'border-red-300 bg-red-50/30' : ''}`}
+            className={`sp-textarea ${voice.isRecording ? 'border-red-300 bg-red-50/30' : ''}`}
             rows={6}
-            placeholder={isRecording ? '音声を認識しています...' : '商談内容を入力（音声入力可）'}
+            placeholder={voice.isRecording ? '音声を認識しています...' : '商談内容を入力（音声入力可）'}
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
           />
-          {isRecording && (
+          {voice.isRecording && (
             <p className="text-[10px] text-red-500 mt-0.5 flex items-center gap-1">
               <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
               音声認識中...マイクに向かって話してください
