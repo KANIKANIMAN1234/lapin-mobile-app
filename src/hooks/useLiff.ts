@@ -7,6 +7,7 @@ import { callGas, callGasGet, isGasConfigured, getSessionToken, createSessionFro
 interface LiffState {
   userId: string;
   userName: string;
+  userRole: string;
   isReady: boolean;
   isRetired: boolean;
 }
@@ -15,6 +16,7 @@ export function useLiff() {
   const [state, setState] = useState<LiffState>({
     userId: '',
     userName: '',
+    userRole: '',
     isReady: false,
     isRetired: false,
   });
@@ -33,6 +35,7 @@ export function useLiff() {
             setState({
               userId: String(userRes.data.id || ''),
               userName: String(userRes.data.name || ''),
+              userRole: String(userRes.data.role || ''),
               isReady: true,
               isRetired: !!isDeleted,
             });
@@ -65,14 +68,17 @@ export function useLiff() {
               displayName: profile.displayName,
             });
             if (regResult?.data?.is_deleted) {
-              setState({ userId: profile.userId, userName: displayName, isReady: true, isRetired: true });
+              setState({ userId: profile.userId, userName: displayName, userRole: '', isReady: true, isRetired: true });
               return;
             }
             if (regResult?.data?.name) {
               displayName = regResult.data.name;
             }
+            const role = String(regResult?.data?.role || '');
+            setState({ userId: profile.userId, userName: displayName, userRole: role, isReady: true, isRetired: false });
+            return;
           }
-          setState({ userId: profile.userId, userName: displayName, isReady: true, isRetired: false });
+          setState({ userId: profile.userId, userName: displayName, userRole: '', isReady: true, isRetired: false });
         } catch {
           enableDemo();
         }
@@ -82,7 +88,7 @@ export function useLiff() {
     }
 
     function enableDemo() {
-      setState({ userId: 'demo_user', userName: 'テストユーザー', isReady: true, isRetired: false });
+      setState({ userId: 'demo_user', userName: 'テストユーザー', userRole: '', isReady: true, isRetired: false });
     }
 
     init();

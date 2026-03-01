@@ -8,6 +8,7 @@ interface NavItem {
   label: string;
   className?: string;
   hidden?: boolean;
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -18,6 +19,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'meeting', icon: 'handshake', label: '商談' },
   { id: 'list', icon: 'receipt_long', label: '履歴' },
   { id: 'summary', icon: 'pie_chart', label: '集計' },
+  { id: 'adminProject', icon: 'note_add', label: '案件登録', adminOnly: true },
+  { id: 'adminNotice', icon: 'campaign', label: '連絡投稿', adminOnly: true },
   { id: 'newProject', icon: 'note_add', label: '新規登録', className: 'text-blue-500', hidden: true },
 ];
 
@@ -25,13 +28,17 @@ interface BottomNavProps {
   activePage: PageId;
   onNavigate: (page: PageId) => void;
   showNewProject?: boolean;
+  userRole?: string;
 }
 
-export default function BottomNav({ activePage, onNavigate, showNewProject }: BottomNavProps) {
+export default function BottomNav({ activePage, onNavigate, showNewProject, userRole }: BottomNavProps) {
+  const isAdmin = userRole === 'admin';
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 h-[60px] bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] flex justify-around items-center z-50 max-w-[500px] mx-auto">
       {NAV_ITEMS.map((item) => {
         if (item.hidden && !showNewProject) return null;
+        if (item.adminOnly && !isAdmin) return null;
         const isActive = activePage === item.id;
         return (
           <button

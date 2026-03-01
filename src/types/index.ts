@@ -48,4 +48,6 @@ export type PageId =
   | 'list'
   | 'summary'
   | 'newProject'
-  | 'meeting';
+  | 'meeting'
+  | 'adminProject'
+  | 'adminNotice';

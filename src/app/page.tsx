@@ -17,6 +17,8 @@ import HistoryPage from '@/components/pages/HistoryPage';
 import SummaryPage from '@/components/pages/SummaryPage';
 import NewProjectPage from '@/components/pages/NewProjectPage';
 import MeetingPage from '@/components/pages/MeetingPage';
+import AdminProjectPage from '@/components/pages/AdminProjectPage';
+import AdminNoticePage from '@/components/pages/AdminNoticePage';
 
 function mapGasExpense(e: Record<string, unknown>): ExpenseItem {
   return {
@@ -42,7 +44,7 @@ function mapGasProject(p: Record<string, unknown>): ProjectOption {
 }
 
 export default function Home() {
-  const { userId, userName, isReady, isRetired } = useLiff();
+  const { userId, userName, userRole, isReady, isRetired } = useLiff();
   const sendToGas = useSendToGas();
   const { toast, show: showToast } = useToast();
 
@@ -206,9 +208,28 @@ export default function Home() {
             onToast={handleToast}
           />
         )}
+
+        {activePage === 'adminProject' && (
+          <AdminProjectPage
+            sendToGas={sendToGas}
+            onShowLoading={showLoading}
+            onHideLoading={hideLoading}
+            onToast={handleToast}
+          />
+        )}
+
+        {activePage === 'adminNotice' && (
+          <AdminNoticePage
+            userName={userName}
+            sendToGas={sendToGas}
+            onShowLoading={showLoading}
+            onHideLoading={hideLoading}
+            onToast={handleToast}
+          />
+        )}
       </div>
 
-      <BottomNav activePage={activePage} onNavigate={setActivePage} />
+      <BottomNav activePage={activePage} onNavigate={setActivePage} userRole={userRole} />
       <LoadingOverlay visible={loading} text={loadingText} />
       <Toast message={toast.message} type={toast.type} visible={toast.visible} />
     </>
