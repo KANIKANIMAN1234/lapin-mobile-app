@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -13,12 +13,38 @@ import {
 import { Doughnut, Bar } from 'react-chartjs-2';
 import type { ExpenseItem, ProjectOption } from '@/types';
 import { formatYen } from '@/lib/utils';
+import { callGasGet, isGasConfigured } from '@/lib/gas';
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 interface SummaryPageProps {
   data: ExpenseItem[];
   projects: ProjectOption[];
+}
+
+interface KpiData {
+  assigned_projects_count: number;
+  assigned_projects_amount: number;
+  sent_estimates_count: number;
+  sent_estimates_amount: number;
+  contract_count: number;
+  contract_amount: number;
+  contract_rate: number;
+  average_contract_amount: number;
+  gross_profit_amount: number;
+  gross_profit_rate: number;
+}
+
+interface BonusData {
+  period_label: string;
+  period_months: string;
+  fixed_cost: number;
+  gross_profit: number;
+  surplus: number;
+  bonus_estimate: number;
+  distribution_rate: number;
+  target_amount: number;
+  achievement_rate: number;
 }
 
 const CHART_COLORS = ['#06C755', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#10b981'];
@@ -28,6 +54,25 @@ export default function SummaryPage({ data, projects }: SummaryPageProps) {
   const [filterYear, setFilterYear] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterProject, setFilterProject] = useState('');
+  const [kpi, setKpi] = useState<KpiData | null>(null);
+  const [bonus, setBonus] = useState<BonusData | null>(null);
+  const [dashLoading, setDashLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isGasConfigured()) { setDashLoading(false); return; }
+    const now = new Date();
+    const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+    callGasGet('getDashboard', { start_date: startDate, end_date: endDate })
+      .then((res) => {
+        if (res?.success && res.data) {
+          if (res.data.kpi) setKpi(res.data.kpi as KpiData);
+          if (res.data.bonus_progress) setBonus(res.data.bonus_progress as BonusData);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDashLoading(false));
+  }, []);
 
   const projectMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -93,8 +138,85 @@ export default function SummaryPage({ data, projects }: SummaryPageProps) {
     ],
   };
 
+  const kpiItems = kpi ? [
+    { title: '担当案件数', value: String(kpi.assigned_projects_count), unit: '件' },
+    { title: '見込み金額', value: formatYen(kpi.assigned_projects_amount), unit: '' },
+    { title: '送客金額', value: formatYen(kpi.sent_estimates_amount ?? 0), unit: '' },
+    { title: '見積もり数', value: String(kpi.sent_estimates_count), unit: '件' },
+    { title: '契約数', value: String(kpi.contract_count), unit: '件' },
+    { title: '契約平均単価', value: kpi.average_contract_amount > 0 ? formatYen(kpi.average_contract_amount) : '-', unit: '' },
+    { title: '契約率', value: String(kpi.contract_rate), unit: '%' },
+    { title: '粗利率', value: String(kpi.gross_profit_rate), unit: '%' },
+  ] : [];
+
   return (
     <div>
+      {/* KPIカード */}
+      {dashLoading ? (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 text-center text-gray-400 text-sm">KPI読み込み中...</div>
+      ) : kpi && (
+        <div className="grid grid-cols-4 gap-1.5 mb-3">
+          {kpiItems.map((item) => (
+            <div key={item.title} className="bg-white rounded-lg p-2 shadow-sm text-center">
+              <div className="text-[10px] text-gray-500 mb-0.5 truncate">{item.title}</div>
+              <div className="text-sm font-bold text-gray-900 leading-tight">
+                {item.value}
+                {item.unit && <span className="text-[10px] font-normal text-gray-500 ml-0.5">{item.unit}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ボーナス進捗 */}
+      {bonus && (
+        <div className="bg-white rounded-xl p-3 shadow-sm mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold text-gray-700 flex items-center gap-1">
+              <span className="material-icons text-amber-500" style={{ fontSize: 16 }}>emoji_events</span>
+              マイボーナス進捗（{bonus.period_label}）
+            </h3>
+            <span className="text-[10px] text-gray-400">{bonus.period_months}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
+            <div className="bg-gray-50 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-gray-500">固定費負担額</div>
+              <div className="text-xs font-bold">{formatYen(bonus.fixed_cost)}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-gray-500">期間粗利</div>
+              <div className="text-xs font-bold">{formatYen(bonus.gross_profit)}</div>
+            </div>
+            <div className={`rounded-lg p-2 text-center ${bonus.surplus >= 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
+              <div className="text-[10px] text-gray-500">粗利 − 固定費</div>
+              <div className={`text-xs font-bold ${bonus.surplus >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {bonus.surplus >= 0 ? '+' : ''}{formatYen(bonus.surplus)}
+              </div>
+            </div>
+            <div className="bg-amber-50 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-gray-500">ボーナス見込み</div>
+              <div className="text-xs font-bold text-amber-600">{formatYen(bonus.bonus_estimate)}</div>
+              <div className="text-[9px] text-gray-400">超過分 × {bonus.distribution_rate}%</div>
+            </div>
+          </div>
+          {/* プログレスバー */}
+          <div className="flex items-center justify-between text-[9px] text-gray-400 mb-0.5">
+            <span>0</span>
+            <span>固定費 {formatYen(bonus.fixed_cost)}</span>
+            <span>目標 {formatYen(bonus.target_amount)}</span>
+          </div>
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden relative">
+            <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(100, bonus.achievement_rate)}%` }} />
+            {bonus.target_amount > 0 && (
+              <div className="absolute top-0 h-full w-px bg-red-400" style={{ left: `${Math.min(100, (bonus.fixed_cost / bonus.target_amount) * 100)}%` }} />
+            )}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-0.5 text-center">
+            現在: {formatYen(bonus.gross_profit)}（達成率 {bonus.achievement_rate}%）
+          </div>
+        </div>
+      )}
+
       <div className="bg-gray-100 p-2.5 rounded-xl mb-3">
         <div className="grid grid-cols-3 gap-2">
           <select className="sp-input py-2 text-xs" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
