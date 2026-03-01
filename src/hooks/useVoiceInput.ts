@@ -1,212 +1,163 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { callGas } from '@/lib/gas';
 
+/**
+ * MediaRecorder で録音し、OpenAI Whisper API で文字起こしするフック。
+ * Web Speech API に依存しないため、LIFF / モバイル WebView でも安定動作する。
+ */
 export function useVoiceInput(onResult: (text: string) => void) {
   const [isRecording, setIsRecording] = useState(false);
   const [statusText, setStatusText] = useState('');
-  const recognitionRef = useRef<SpeechRecInstance | null>(null);
-  const baseTextRef = useRef('');
-  const accumulatedRef = useRef('');
-  const intentionalStopRef = useRef(false);
+
   const onResultRef = useRef(onResult);
-  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const failCountRef = useRef(0);
+  const baseTextRef = useRef('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const busyRef = useRef(false);
 
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
-  const cleanup = useCallback(() => {
-    if (restartTimerRef.current) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
-    }
-    const rec = recognitionRef.current;
-    if (rec) {
-      try { rec.onresult = null; rec.onerror = null; rec.onend = null; } catch { /* */ }
-      try { rec.abort(); } catch { /* */ }
-      recognitionRef.current = null;
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
   }, []);
 
-  const doRestart = useCallback(() => {
-    if (intentionalStopRef.current) return;
-    if (failCountRef.current > 5) {
-      setIsRecording(false);
-      setStatusText('音声認識を再起動できません。もう一度マイクボタンを押してください。');
-      return;
-    }
+  const startRecording = useCallback(async (currentText: string) => {
+    if (busyRef.current) return false;
+    baseTextRef.current = currentText;
 
-    const rec = createRecognition();
-    if (!rec) {
-      setIsRecording(false);
-      setStatusText('');
-      return;
-    }
-
-    rec.onresult = (event: SpeechRecResultEvent) => {
-      failCountRef.current = 0;
-      let transcript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      accumulatedRef.current = transcript;
-      onResultRef.current(baseTextRef.current + transcript);
-    };
-
-    rec.onerror = (e: SpeechRecErrorEvent) => {
-      const err = e.error || '';
-      console.warn('[useVoiceInput] onerror:', err);
-      if (err === 'not-allowed' || err === 'service-not-allowed') {
-        intentionalStopRef.current = true;
-        cleanup();
-        setIsRecording(false);
-        setStatusText('マイクの使用が許可されていません');
-        return;
-      }
-      // no-speech, aborted, network, audio-capture → onend で再起動するので無視
-    };
-
-    rec.onend = () => {
-      console.warn('[useVoiceInput] onend, intentional=', intentionalStopRef.current);
-      if (intentionalStopRef.current) {
-        setIsRecording(false);
-        setStatusText('');
-        return;
-      }
-      baseTextRef.current += accumulatedRef.current;
-      accumulatedRef.current = '';
-      failCountRef.current++;
-      restartTimerRef.current = setTimeout(doRestart, 400);
-    };
+    if (!navigator.mediaDevices?.getUserMedia) return false;
 
     try {
-      rec.start();
-      recognitionRef.current = rec;
-      setStatusText('音声認識中...話してください');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeType = pickMimeType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start(1000);
+      setIsRecording(true);
+      setStatusText('🎙 録音中…停止ボタンで文字起こしします');
+      return true;
     } catch (err) {
-      console.warn('[useVoiceInput] start failed:', err);
-      failCountRef.current++;
-      restartTimerRef.current = setTimeout(doRestart, 800);
+      console.error('[useVoiceInput] getUserMedia error:', err);
+      stopStream();
+      setStatusText('マイクにアクセスできません');
+      setTimeout(() => setStatusText(''), 3000);
+      return false;
     }
-  }, [cleanup]);
+  }, [stopStream]);
 
-  const start = useCallback(
-    (currentText: string) => {
-      cleanup();
-      baseTextRef.current = currentText;
-      accumulatedRef.current = '';
-      intentionalStopRef.current = false;
-      failCountRef.current = 0;
+  const stopRecording = useCallback(async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== 'recording') {
+      setIsRecording(false);
+      setStatusText('');
+      stopStream();
+      return;
+    }
 
-      const rec = createRecognition();
-      if (!rec) return false;
+    busyRef.current = true;
+    setStatusText('⏳ 文字起こし中…少々お待ちください');
 
-      rec.onresult = (event: SpeechRecResultEvent) => {
-        failCountRef.current = 0;
-        let transcript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        accumulatedRef.current = transcript;
-        onResultRef.current(baseTextRef.current + transcript);
-      };
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      recorder.stop();
+    });
+    stopStream();
+    mediaRecorderRef.current = null;
 
-      rec.onerror = (e: SpeechRecErrorEvent) => {
-        const err = e.error || '';
-        console.warn('[useVoiceInput] onerror:', err);
-        if (err === 'not-allowed' || err === 'service-not-allowed') {
-          intentionalStopRef.current = true;
-          cleanup();
-          setIsRecording(false);
-          setStatusText('マイクの使用が許可されていません');
-          return;
-        }
-      };
+    if (audioChunksRef.current.length === 0) {
+      setIsRecording(false);
+      setStatusText('');
+      busyRef.current = false;
+      return;
+    }
 
-      rec.onend = () => {
-        console.warn('[useVoiceInput] onend, intentional=', intentionalStopRef.current);
-        if (intentionalStopRef.current) {
-          setIsRecording(false);
-          setStatusText('');
-          return;
-        }
-        baseTextRef.current += accumulatedRef.current;
-        accumulatedRef.current = '';
-        failCountRef.current++;
-        restartTimerRef.current = setTimeout(doRestart, 400);
-      };
+    const mime = recorder.mimeType || 'audio/webm';
+    const blob = new Blob(audioChunksRef.current, { type: mime });
+    audioChunksRef.current = [];
 
-      try {
-        rec.start();
-        recognitionRef.current = rec;
-        setIsRecording(true);
-        setStatusText('音声認識中...話してください');
-        return true;
-      } catch (err) {
-        console.warn('[useVoiceInput] initial start failed:', err);
-        return false;
+    try {
+      const base64 = await blobToBase64(blob);
+      const res = await callGas('transcribeAudio', { audio_data: base64 });
+
+      if (res.success && res.data?.text) {
+        const prev = baseTextRef.current;
+        const newText = prev ? prev + '\n' + res.data.text : res.data.text;
+        onResultRef.current(newText);
+        setStatusText('✅ 文字起こし完了');
+      } else {
+        const msg = res.error || '文字起こしに失敗しました';
+        console.error('[useVoiceInput] transcribe error:', msg);
+        setStatusText('❌ ' + msg);
       }
-    },
-    [cleanup, doRestart],
-  );
+    } catch (err) {
+      console.error('[useVoiceInput] transcribe network error:', err);
+      setStatusText('❌ 通信エラーが発生しました');
+    }
 
-  const stop = useCallback(() => {
-    intentionalStopRef.current = true;
-    cleanup();
+    setTimeout(() => setStatusText(''), 2500);
     setIsRecording(false);
-    setStatusText('');
-  }, [cleanup]);
+    busyRef.current = false;
+  }, [stopStream]);
 
   const toggle = useCallback(
     (currentText: string) => {
+      if (busyRef.current) return 'ok';
       if (isRecording) {
-        stop();
-      } else {
-        const ok = start(currentText);
-        if (!ok) return 'unsupported';
+        stopRecording();
+        return 'ok';
       }
+
+      if (!navigator.mediaDevices?.getUserMedia) return 'unsupported';
+      startRecording(currentText);
       return 'ok';
     },
-    [isRecording, start, stop],
+    [isRecording, startRecording, stopRecording],
   );
 
   useEffect(() => {
-    return () => { intentionalStopRef.current = true; cleanup(); };
-  }, [cleanup]);
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch { /* */ }
+      }
+      stopStream();
+    };
+  }, [stopStream]);
 
   return { isRecording, statusText, toggle };
 }
 
-interface SpeechRecResultEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
+function pickMimeType(): string | undefined {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ];
+  for (const m of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return undefined;
 }
 
-interface SpeechRecErrorEvent {
-  error: string;
-  message?: string;
-}
-
-type SpeechRecInstance = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  onresult: ((e: SpeechRecResultEvent) => void) | null;
-  onerror: ((e: SpeechRecErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-};
-
-function createRecognition(): SpeechRecInstance | null {
-  const W = window as unknown as Record<string, unknown>;
-  const SpeechRec = W.SpeechRecognition || W.webkitSpeechRecognition;
-  if (!SpeechRec) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rec = new (SpeechRec as any)() as SpeechRecInstance;
-  rec.lang = 'ja-JP';
-  rec.continuous = true;
-  rec.interimResults = true;
-  return rec;
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
 }
