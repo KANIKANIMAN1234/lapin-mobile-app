@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { ProjectOption } from '@/types';
 import { CATEGORIES } from '@/lib/constants';
 import { todayStr, compressImage } from '@/lib/utils';
+import { callGasGet, isGasConfigured } from '@/lib/gas';
 
 interface ExpensePageProps {
   userId: string;
@@ -37,9 +38,19 @@ export default function ExpensePage({
   const [submitting, setSubmitting] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
   const [ocrDone, setOcrDone] = useState(false);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(CATEGORIES);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isGasConfigured()) return;
+    callGasGet('getMasters').then((res: { success?: boolean; data?: Record<string, Array<{ value: string }>> }) => {
+      if (res.success && res.data?.category && res.data.category.length > 0) {
+        setCategoryOptions(res.data.category.map((item) => item.value));
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -258,7 +269,7 @@ export default function ExpensePage({
 
         <label className="sp-label">カテゴリ</label>
         <select className="sp-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-          {CATEGORIES.map((c) => (
+          {categoryOptions.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
