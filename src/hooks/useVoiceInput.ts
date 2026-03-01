@@ -11,6 +11,7 @@ export function useVoiceInput(onResult: (text: string) => void) {
   const intentionalStopRef = useRef(false);
   const onResultRef = useRef(onResult);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failCountRef = useRef(0);
 
   useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
@@ -19,17 +20,31 @@ export function useVoiceInput(onResult: (text: string) => void) {
       clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+    const rec = recognitionRef.current;
+    if (rec) {
+      try { rec.onresult = null; rec.onerror = null; rec.onend = null; } catch { /* */ }
+      try { rec.abort(); } catch { /* */ }
       recognitionRef.current = null;
     }
   }, []);
 
-  const launchRecognition = useCallback(() => {
-    const rec = createRecognition();
-    if (!rec) return false;
+  const doRestart = useCallback(() => {
+    if (intentionalStopRef.current) return;
+    if (failCountRef.current > 5) {
+      setIsRecording(false);
+      setStatusText('音声認識を再起動できません。もう一度マイクボタンを押してください。');
+      return;
+    }
 
-    rec.onresult = (event) => {
+    const rec = createRecognition();
+    if (!rec) {
+      setIsRecording(false);
+      setStatusText('');
+      return;
+    }
+
+    rec.onresult = (event: SpeechRecResultEvent) => {
+      failCountRef.current = 0;
       let transcript = '';
       for (let i = 0; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
@@ -38,16 +53,21 @@ export function useVoiceInput(onResult: (text: string) => void) {
       onResultRef.current(baseTextRef.current + transcript);
     };
 
-    rec.onerror = (e) => {
-      const err = (e as ErrorEvent & { error?: string }).error || '';
-      if (err === 'no-speech' || err === 'aborted') return;
-      intentionalStopRef.current = true;
-      cleanup();
-      setIsRecording(false);
-      setStatusText('');
+    rec.onerror = (e: SpeechRecErrorEvent) => {
+      const err = e.error || '';
+      console.warn('[useVoiceInput] onerror:', err);
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        intentionalStopRef.current = true;
+        cleanup();
+        setIsRecording(false);
+        setStatusText('マイクの使用が許可されていません');
+        return;
+      }
+      // no-speech, aborted, network, audio-capture → onend で再起動するので無視
     };
 
     rec.onend = () => {
+      console.warn('[useVoiceInput] onend, intentional=', intentionalStopRef.current);
       if (intentionalStopRef.current) {
         setIsRecording(false);
         setStatusText('');
@@ -55,34 +75,79 @@ export function useVoiceInput(onResult: (text: string) => void) {
       }
       baseTextRef.current += accumulatedRef.current;
       accumulatedRef.current = '';
-      restartTimerRef.current = setTimeout(() => {
-        if (intentionalStopRef.current) return;
-        launchRecognition();
-      }, 300);
+      failCountRef.current++;
+      restartTimerRef.current = setTimeout(doRestart, 400);
     };
 
     try {
       rec.start();
       recognitionRef.current = rec;
-      return true;
-    } catch {
-      return false;
+      setStatusText('音声認識中...話してください');
+    } catch (err) {
+      console.warn('[useVoiceInput] start failed:', err);
+      failCountRef.current++;
+      restartTimerRef.current = setTimeout(doRestart, 800);
     }
   }, [cleanup]);
 
   const start = useCallback(
     (currentText: string) => {
+      cleanup();
       baseTextRef.current = currentText;
       accumulatedRef.current = '';
       intentionalStopRef.current = false;
+      failCountRef.current = 0;
 
-      const ok = launchRecognition();
-      if (!ok) return false;
-      setIsRecording(true);
-      setStatusText('音声認識中...話してください');
-      return true;
+      const rec = createRecognition();
+      if (!rec) return false;
+
+      rec.onresult = (event: SpeechRecResultEvent) => {
+        failCountRef.current = 0;
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        accumulatedRef.current = transcript;
+        onResultRef.current(baseTextRef.current + transcript);
+      };
+
+      rec.onerror = (e: SpeechRecErrorEvent) => {
+        const err = e.error || '';
+        console.warn('[useVoiceInput] onerror:', err);
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          intentionalStopRef.current = true;
+          cleanup();
+          setIsRecording(false);
+          setStatusText('マイクの使用が許可されていません');
+          return;
+        }
+      };
+
+      rec.onend = () => {
+        console.warn('[useVoiceInput] onend, intentional=', intentionalStopRef.current);
+        if (intentionalStopRef.current) {
+          setIsRecording(false);
+          setStatusText('');
+          return;
+        }
+        baseTextRef.current += accumulatedRef.current;
+        accumulatedRef.current = '';
+        failCountRef.current++;
+        restartTimerRef.current = setTimeout(doRestart, 400);
+      };
+
+      try {
+        rec.start();
+        recognitionRef.current = rec;
+        setIsRecording(true);
+        setStatusText('音声認識中...話してください');
+        return true;
+      } catch (err) {
+        console.warn('[useVoiceInput] initial start failed:', err);
+        return false;
+      }
     },
-    [launchRecognition],
+    [cleanup, doRestart],
   );
 
   const stop = useCallback(() => {
@@ -112,12 +177,26 @@ export function useVoiceInput(onResult: (text: string) => void) {
   return { isRecording, statusText, toggle };
 }
 
+interface SpeechRecResultEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecErrorEvent {
+  error: string;
+  message?: string;
+}
+
 type SpeechRecInstance = {
-  lang: string; continuous: boolean; interimResults: boolean;
-  onresult: (e: { resultIndex: number; results: SpeechRecognitionResultList }) => void;
-  onerror: (e: Event) => void;
-  onend: () => void;
-  start: () => void; stop: () => void;
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechRecResultEvent) => void) | null;
+  onerror: ((e: SpeechRecErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
 };
 
 function createRecognition(): SpeechRecInstance | null {
@@ -127,7 +206,7 @@ function createRecognition(): SpeechRecInstance | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rec = new (SpeechRec as any)() as SpeechRecInstance;
   rec.lang = 'ja-JP';
-  rec.continuous = false;
+  rec.continuous = true;
   rec.interimResults = true;
   return rec;
 }
