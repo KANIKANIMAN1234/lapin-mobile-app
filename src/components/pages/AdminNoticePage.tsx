@@ -99,7 +99,7 @@ export default function AdminNoticePage({ userName, sendToGas, onShowLoading, on
   };
 
   return (
-    <div className="max-w-[500px] mx-auto px-3 pb-20">
+    <div className="max-w-[500px] mx-auto px-3 pb-28">
       <div className="form-card">
         <h3 className="flex items-center gap-1.5">
           <span className="material-icons text-line-green align-middle">campaign</span>

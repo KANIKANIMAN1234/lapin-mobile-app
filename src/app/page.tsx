@@ -140,7 +140,7 @@ export default function Home() {
   return (
     <>
       <Header userName={userName} />
-      <div className="max-w-[500px] mx-auto p-3">
+      <div className="max-w-[500px] mx-auto p-3 pb-28">
         {activePage === 'input' && (
           <ExpensePage
             userId={userId}

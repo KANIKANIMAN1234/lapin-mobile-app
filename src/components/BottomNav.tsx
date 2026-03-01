@@ -34,25 +34,40 @@ interface BottomNavProps {
 export default function BottomNav({ activePage, onNavigate, showNewProject, userRole }: BottomNavProps) {
   const isAdmin = userRole === 'admin';
 
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.hidden && !showNewProject) return false;
+    if (item.adminOnly && !isAdmin) return false;
+    return true;
+  });
+
+  const perRow = Math.ceil(visibleItems.length / 2);
+  const row1 = visibleItems.slice(0, perRow);
+  const row2 = visibleItems.slice(perRow);
+
+  const renderItem = (item: NavItem) => {
+    const isActive = activePage === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => onNavigate(item.id)}
+        className={`flex flex-col items-center gap-[2px] text-[0.65rem] font-semibold py-1.5 px-1 rounded-lg transition-colors border-none bg-transparent cursor-pointer flex-1 min-w-0 ${
+          isActive ? 'text-line-green' : item.className || 'text-gray-400'
+        }`}
+      >
+        <span className="material-icons" style={{ fontSize: 22 }}>{item.icon}</span>
+        <span className="truncate w-full text-center">{item.label}</span>
+      </button>
+    );
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-[60px] bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] flex justify-around items-center z-50 max-w-[500px] mx-auto">
-      {NAV_ITEMS.map((item) => {
-        if (item.hidden && !showNewProject) return null;
-        if (item.adminOnly && !isAdmin) return null;
-        const isActive = activePage === item.id;
-        return (
-          <button
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            className={`flex flex-col items-center gap-[1px] text-[0.55rem] font-semibold p-1 rounded-lg transition-colors border-none bg-transparent cursor-pointer ${
-              isActive ? 'text-line-green' : item.className || 'text-gray-400'
-            }`}
-          >
-            <span className="material-icons text-xl">{item.icon}</span>
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-50 max-w-[500px] mx-auto">
+      <div className="flex justify-around items-center border-b border-gray-100">
+        {row1.map(renderItem)}
+      </div>
+      <div className="flex justify-around items-center">
+        {row2.map(renderItem)}
+      </div>
     </nav>
   );
 }
