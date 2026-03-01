@@ -82,7 +82,7 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
     if (!raw) return;
     setAiFormatting(true);
     try {
-      const res = await callGas('formatText', { input_text: raw, format_type: 'meeting' });
+      const res = await callGas('formatText', { input_text: raw, prompt_key: 'meeting' });
       const data = res as { success: boolean; data?: { formatted_text?: string } };
       if (data?.success && data.data?.formatted_text) {
         setForm((prev) => ({ ...prev, content: data.data!.formatted_text! }));

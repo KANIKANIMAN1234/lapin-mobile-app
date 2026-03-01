@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { WORK_TYPES, SALES_ROUTES } from '@/lib/constants';
 import { todayStr } from '@/lib/utils';
-import { callGasGet, isGasConfigured } from '@/lib/gas';
+import { callGas, callGasGet, isGasConfigured } from '@/lib/gas';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface Employee {
@@ -38,6 +38,19 @@ export default function AdminProjectPage({ sendToGas, onShowLoading, onHideLoadi
 
   const onDescVoice = useCallback((text: string) => setWorkDesc(text), []);
   const descVoice = useVoiceInput(onDescVoice);
+  const [formatting, setFormatting] = useState(false);
+  const handleFormat = async () => {
+    if (!workDesc.trim()) { onToast('整形する文章がありません', 'error'); return; }
+    setFormatting(true);
+    try {
+      const res = await callGas('formatText', { input_text: workDesc, prompt_key: 'admin_project_desc' });
+      if (res?.success && res.data?.formatted_text) {
+        setWorkDesc(res.data.formatted_text);
+        onToast('AI整形しました', 'success');
+      } else { onToast('整形に失敗しました', 'error'); }
+    } catch { onToast('整形に失敗しました', 'error'); }
+    setFormatting(false);
+  };
 
   useEffect(() => {
     if (!isGasConfigured()) return;
@@ -208,6 +221,9 @@ export default function AdminProjectPage({ sendToGas, onShowLoading, onHideLoadi
                 <span className="material-icons text-lg">{descVoice.isRecording ? 'stop' : 'mic'}</span>
               </button>
             </div>
+            <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100 disabled:opacity-50" onClick={handleFormat} disabled={formatting}>
+              <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> {formatting ? 'AI整形中...' : 'AI整形'}
+            </button>
           </div>
 
           <div className="flex gap-2 mb-3">

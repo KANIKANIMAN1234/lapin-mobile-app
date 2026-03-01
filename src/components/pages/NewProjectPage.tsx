@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import { WORK_TYPES, SALES_ROUTES } from '@/lib/constants';
-import { todayStr, formatText } from '@/lib/utils';
+import { todayStr } from '@/lib/utils';
+import { callGas } from '@/lib/gas';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import LineNotifyModal from '@/components/LineNotifyModal';
 
@@ -38,13 +39,21 @@ export default function NewProjectPage({ sendToGas, onShowLoading, onHideLoading
     );
   };
 
-  const handleFormat = (field: 'desc' | 'memo') => {
+  const [formatting, setFormatting] = useState<string | null>(null);
+  const handleFormat = async (field: 'desc' | 'memo') => {
     const text = field === 'desc' ? workDesc : projectMemo;
     if (!text.trim()) { onToast('整形する文章がありません', 'error'); return; }
-    const formatted = formatText(text);
-    if (field === 'desc') setWorkDesc(formatted);
-    else setProjectMemo(formatted);
-    onToast('文章を整形しました', 'success');
+    const promptKey = field === 'desc' ? 'project_work_desc' : 'project_memo';
+    setFormatting(field);
+    try {
+      const res = await callGas('formatText', { input_text: text, prompt_key: promptKey });
+      if (res?.success && res.data?.formatted_text) {
+        if (field === 'desc') setWorkDesc(res.data.formatted_text);
+        else setProjectMemo(res.data.formatted_text);
+        onToast('AI整形しました', 'success');
+      } else { onToast('整形に失敗しました', 'error'); }
+    } catch { onToast('整形に失敗しました', 'error'); }
+    setFormatting(null);
   };
 
   const handleVoiceToggle = (field: 'desc' | 'memo') => {
@@ -173,8 +182,8 @@ export default function NewProjectPage({ sendToGas, onShowLoading, onHideLoading
                 <span className="material-icons text-lg">{descVoice.isRecording ? 'stop' : 'mic'}</span>
               </button>
             </div>
-            <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100" onClick={() => handleFormat('desc')}>
-              <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> 文章を整形する
+            <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100 disabled:opacity-50" onClick={() => handleFormat('desc')} disabled={formatting === 'desc'}>
+              <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> {formatting === 'desc' ? 'AI整形中...' : 'AI整形'}
             </button>
           </div>
 
@@ -232,8 +241,8 @@ export default function NewProjectPage({ sendToGas, onShowLoading, onHideLoading
                 <span className="material-icons text-lg">{memoVoice.isRecording ? 'stop' : 'mic'}</span>
               </button>
             </div>
-            <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100" onClick={() => handleFormat('memo')}>
-              <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> 文章を整形する
+            <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100 disabled:opacity-50" onClick={() => handleFormat('memo')} disabled={formatting === 'memo'}>
+              <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> {formatting === 'memo' ? 'AI整形中...' : 'AI整形'}
             </button>
           </div>
 

@@ -2,7 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import type { ProjectOption } from '@/types';
-import { todayStr, formatText } from '@/lib/utils';
+import { todayStr } from '@/lib/utils';
+import { callGas } from '@/lib/gas';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface ReportPageProps {
@@ -24,13 +25,18 @@ export default function ReportPage({ projects, sendToGas, onShowLoading, onHideL
   const onVoiceResult = useCallback((text: string) => setContent(text), []);
   const voice = useVoiceInput(onVoiceResult);
 
-  const handleFormat = () => {
-    if (!content.trim()) {
-      onToast('整形する文章がありません', 'error');
-      return;
-    }
-    setContent(formatText(content));
-    onToast('文章を整形しました', 'success');
+  const [formatting, setFormatting] = useState(false);
+  const handleFormat = async () => {
+    if (!content.trim()) { onToast('整形する文章がありません', 'error'); return; }
+    setFormatting(true);
+    try {
+      const res = await callGas('formatText', { input_text: content, prompt_key: 'daily_report' });
+      if (res?.success && res.data?.formatted_text) {
+        setContent(res.data.formatted_text);
+        onToast('AI整形しました', 'success');
+      } else { onToast('整形に失敗しました', 'error'); }
+    } catch { onToast('整形に失敗しました', 'error'); }
+    setFormatting(false);
   };
 
   const addPhotos = (files: FileList | null) => {
@@ -120,8 +126,8 @@ export default function ReportPage({ projects, sendToGas, onShowLoading, onHideL
         <div className={`text-xs min-h-[18px] mt-1 ${voice.isRecording ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
           {voice.statusText}
         </div>
-        <button className="btn-format" onClick={handleFormat}>
-          <span className="material-icons text-base">auto_fix_high</span> 文章を整形
+        <button className="btn-format" onClick={handleFormat} disabled={formatting}>
+          <span className="material-icons text-base">auto_fix_high</span> {formatting ? 'AI整形中...' : 'AI整形'}
         </button>
       </div>
 

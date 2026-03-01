@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback } from 'react';
 import type { ProjectOption } from '@/types';
 import { PHOTO_CATEGORIES } from '@/lib/constants';
-import { todayStr, formatText, compressImage } from '@/lib/utils';
+import { todayStr, compressImage } from '@/lib/utils';
+import { callGas } from '@/lib/gas';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 interface SitePhotoPageProps {
@@ -36,10 +37,18 @@ export default function SitePhotoPage({ projects, sendToGas, onShowLoading, onHi
     setWorkType(types[0] || '');
   };
 
-  const handleFormat = () => {
+  const [formatting, setFormatting] = useState(false);
+  const handleFormat = async () => {
     if (!memo.trim()) { onToast('整形する文章がありません', 'error'); return; }
-    setMemo(formatText(memo));
-    onToast('文章を整形しました', 'success');
+    setFormatting(true);
+    try {
+      const res = await callGas('formatText', { input_text: memo, prompt_key: 'site_photo' });
+      if (res?.success && res.data?.formatted_text) {
+        setMemo(res.data.formatted_text);
+        onToast('AI整形しました', 'success');
+      } else { onToast('整形に失敗しました', 'error'); }
+    } catch { onToast('整形に失敗しました', 'error'); }
+    setFormatting(false);
   };
 
   const addPhotos = (files: FileList | null) => {
@@ -160,8 +169,8 @@ export default function SitePhotoPage({ projects, sendToGas, onShowLoading, onHi
         <div className={`text-xs min-h-[18px] mt-1 ${voice.isRecording ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
           {voice.statusText}
         </div>
-        <button className="btn-format" onClick={handleFormat}>
-          <span className="material-icons text-base">auto_fix_high</span> 文章を整形
+        <button className="btn-format" onClick={handleFormat} disabled={formatting}>
+          <span className="material-icons text-base">auto_fix_high</span> {formatting ? 'AI整形中...' : 'AI整形'}
         </button>
       </div>
 
