@@ -16,6 +16,7 @@ import SitePhotoPage from '@/components/pages/SitePhotoPage';
 import HistoryPage from '@/components/pages/HistoryPage';
 import SummaryPage from '@/components/pages/SummaryPage';
 import NewProjectPage from '@/components/pages/NewProjectPage';
+import MeetingPage from '@/components/pages/MeetingPage';
 
 function mapGasExpense(e: Record<string, unknown>): ExpenseItem {
   return {
@@ -171,6 +172,16 @@ export default function Home() {
 
         {activePage === 'sitePhoto' && (
           <SitePhotoPage
+            projects={projects}
+            sendToGas={sendToGas}
+            onShowLoading={showLoading}
+            onHideLoading={hideLoading}
+            onToast={handleToast}
+          />
+        )}
+
+        {activePage === 'meeting' && (
+          <MeetingPage
             projects={projects}
             sendToGas={sendToGas}
             onShowLoading={showLoading}

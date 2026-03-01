@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'attendance', icon: 'schedule', label: '出退勤' },
   { id: 'report', icon: 'description', label: '日報' },
   { id: 'sitePhoto', icon: 'photo_library', label: '現場写真' },
+  { id: 'meeting', icon: 'handshake', label: '商談' },
   { id: 'list', icon: 'receipt_long', label: '履歴' },
   { id: 'summary', icon: 'pie_chart', label: '集計' },
   { id: 'newProject', icon: 'note_add', label: '新規登録', className: 'text-blue-500', hidden: true },

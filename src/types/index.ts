@@ -47,4 +47,5 @@ export type PageId =
   | 'sitePhoto'
   | 'list'
   | 'summary'
-  | 'newProject';
+  | 'newProject'
+  | 'meeting';
