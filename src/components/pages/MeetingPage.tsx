@@ -215,14 +215,13 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
           <textarea
             className={`sp-textarea ${voice.isRecording ? 'border-red-300 bg-red-50/30' : ''}`}
             rows={6}
-            placeholder={voice.isRecording ? '音声を認識しています...' : '商談内容を入力（音声入力可）'}
+            placeholder={voice.isRecording ? '録音中...停止ボタンを押すと文字起こしします' : '商談内容を入力（音声入力可）'}
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
           />
-          {voice.isRecording && (
-            <p className="text-[10px] text-red-500 mt-0.5 flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-              音声認識中...マイクに向かって話してください
+          {voice.statusText && (
+            <p className={`text-[10px] mt-0.5 flex items-center gap-1 ${voice.isRecording ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>
+              {voice.statusText}
             </p>
           )}
 

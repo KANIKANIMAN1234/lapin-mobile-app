@@ -182,6 +182,7 @@ export default function NewProjectPage({ sendToGas, onShowLoading, onHideLoading
                 <span className="material-icons text-lg">{descVoice.isRecording ? 'stop' : 'mic'}</span>
               </button>
             </div>
+            {descVoice.statusText && <p className={`text-[10px] mt-0.5 ${descVoice.isRecording ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>{descVoice.statusText}</p>}
             <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100 disabled:opacity-50" onClick={() => handleFormat('desc')} disabled={formatting === 'desc'}>
               <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> {formatting === 'desc' ? 'AI整形中...' : 'AI整形'}
             </button>
@@ -241,6 +242,7 @@ export default function NewProjectPage({ sendToGas, onShowLoading, onHideLoading
                 <span className="material-icons text-lg">{memoVoice.isRecording ? 'stop' : 'mic'}</span>
               </button>
             </div>
+            {memoVoice.statusText && <p className={`text-[10px] mt-0.5 ${memoVoice.isRecording ? 'text-red-500 font-semibold' : 'text-gray-500'}`}>{memoVoice.statusText}</p>}
             <button className="inline-flex items-center gap-1 mt-1.5 px-3.5 py-1.5 border border-gray-300 rounded-full bg-white text-gray-600 text-[0.72rem] font-semibold cursor-pointer active:bg-gray-100 disabled:opacity-50" onClick={() => handleFormat('memo')} disabled={formatting === 'memo'}>
               <span className="material-icons text-sm text-indigo-500">auto_fix_high</span> {formatting === 'memo' ? 'AI整形中...' : 'AI整形'}
             </button>
