@@ -2,65 +2,64 @@
 
 import { useState, useRef, useCallback } from 'react';
 
-interface SpeechRecognitionEvent {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
 export function useVoiceInput(onResult: (text: string) => void) {
   const [isRecording, setIsRecording] = useState(false);
   const [statusText, setStatusText] = useState('');
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ReturnType<typeof createRecognition> | null>(null);
   const baseTextRef = useRef('');
+  const intentionalStopRef = useRef(false);
 
   const start = useCallback(
     (currentText: string) => {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SpeechRecognition) {
+      const rec = createRecognition();
+      if (!rec) return false;
+
+      baseTextRef.current = currentText;
+      intentionalStopRef.current = false;
+
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        onResult(baseTextRef.current + transcript);
+      };
+
+      rec.onerror = (e: Event & { error?: string }) => {
+        const error = e.error || '';
+        if (error === 'no-speech' || error === 'aborted') return;
+        stop();
+      };
+
+      rec.onend = () => {
+        if (!intentionalStopRef.current && recognitionRef.current) {
+          try { rec.start(); } catch { stop(); }
+          return;
+        }
+        setIsRecording(false);
+      };
+
+      try {
+        rec.start();
+        recognitionRef.current = rec;
+        setIsRecording(true);
+        setStatusText('音声認識中...話してください');
+        return true;
+      } catch {
         return false;
       }
-
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'ja-JP';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      baseTextRef.current = currentText;
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interim = '';
-        let finalText = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalText += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        onResult(baseTextRef.current + finalText + interim);
-      };
-
-      recognition.onerror = () => stop();
-      recognition.onend = () => {
-        if (recognitionRef.current) stop();
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-      setIsRecording(true);
-      setStatusText('音声認識中...話してください');
-      return true;
     },
     [onResult],
   );
 
   const stop = useCallback(() => {
+    intentionalStopRef.current = true;
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
     setIsRecording(false);
-    setStatusText('音声入力を終了しました');
+    setStatusText('');
   }, []);
 
   const toggle = useCallback(
@@ -77,4 +76,27 @@ export function useVoiceInput(onResult: (text: string) => void) {
   );
 
   return { isRecording, statusText, toggle };
+}
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+function createRecognition() {
+  const W = window as unknown as Record<string, unknown>;
+  const SpeechRec = W.SpeechRecognition || W.webkitSpeechRecognition;
+  if (!SpeechRec) return null;
+  const Ctor = SpeechRec as { new (): {
+    lang: string; continuous: boolean; interimResults: boolean;
+    onresult: (e: SpeechRecognitionEvent) => void;
+    onerror: (e: Event & { error?: string }) => void;
+    onend: () => void;
+    start: () => void; stop: () => void;
+  } };
+  const rec = new Ctor();
+  rec.lang = 'ja-JP';
+  rec.continuous = true;
+  rec.interimResults = true;
+  return rec;
 }
