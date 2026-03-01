@@ -23,13 +23,14 @@ interface MeetingRecord {
   user_name: string;
 }
 
-const MEETING_TYPES = ['訪問', '電話', 'オンライン', 'メール', '来店', 'その他'];
+const DEFAULT_MEETING_TYPES = ['訪問', '電話', 'オンライン', 'メール', '来店', 'その他'];
 
 export default function MeetingPage({ projects, sendToGas, onShowLoading, onHideLoading, onToast }: MeetingPageProps) {
   const [view, setView] = useState<'list' | 'create'>('list');
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState('');
+  const [meetingTypes, setMeetingTypes] = useState<string[]>(DEFAULT_MEETING_TYPES);
 
   const [form, setForm] = useState({
     project_id: '',
@@ -60,6 +61,14 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
     if (selectedProject) loadMeetings(selectedProject);
     else { setMeetings([]); setLoading(false); }
   }, [selectedProject, loadMeetings]);
+
+  useEffect(() => {
+    callGasGet('getMasters').then((res: { success?: boolean; data?: Record<string, Array<{ value: string }>> }) => {
+      if (res?.success && res.data?.meeting_type && res.data.meeting_type.length > 0) {
+        setMeetingTypes(res.data.meeting_type.map((item) => item.value));
+      }
+    }).catch(() => {});
+  }, []);
 
   const toggleVoice = useCallback(() => {
     if (isRecording) {
@@ -198,7 +207,7 @@ export default function MeetingPage({ projects, sendToGas, onShowLoading, onHide
                 value={form.meeting_type}
                 onChange={(e) => setForm({ ...form, meeting_type: e.target.value })}
               >
-                {MEETING_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {meetingTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
