@@ -128,8 +128,9 @@ export function useVoiceInput(onResult: (text: string) => void) {
         onResultRef.current(newText);
         showStatus('✅ 文字起こし完了', 2500);
       } else {
-        const msg = typeof res.error === 'string' ? res.error
-          : typeof res.error === 'object' && res.error ? JSON.stringify(res.error)
+        const err = res.error;
+        const msg = typeof err === 'string' ? err
+          : typeof err === 'object' && err ? (err.message || err.code || JSON.stringify(err))
           : '文字起こしに失敗しました';
         console.error('[useVoiceInput] transcribe error:', msg);
         showStatus('❌ ' + msg, 5000);
